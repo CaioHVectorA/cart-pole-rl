@@ -1,0 +1,15 @@
+# Ambientes virtuais e caches Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+dist/
+build/
+
+# Logs e checkpoints intermediários de treino (mantém apenas o modelo campeão)
+runs/*
+!runs/ppo_cartpole/
+runs/ppo_cartpole/*
+!runs/ppo_cartpole/best_model.zip
+!runs/ppo_cartpole/run_config.json

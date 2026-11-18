@@ -19,6 +19,18 @@ Simulador físico de alta fidelidade (RK4) e suíte de treinamento em **Reinforc
 - **Estúdio Interativo em Pygame:**
   - Controles ao vivo de inclinação da mesa, vento, rajadas, modo de transmissão (polia vs fuso), petelecos com mouse/teclado, gráficos em tempo real e modo manual ou IA.
 
+## Demonstração (Modelos de 4h)
+
+### 1. Condição Simples — `ppo_simple` (Estágio 0: Mesa Plana Limpa)
+*Swing-up* em `~1.42 s` e estabilização precisa no centro do trilho (`|x| ~ 0.85 cm`):
+
+![ppo_simple se equilibrando no Estágio 0](assets/ppo_simple_balancing.gif)
+
+### 2. Caos + Adaptabilidade — `ppo_chaotic` (Estágio 4 Dinâmico)
+Adaptação em tempo real com inclinação da mesa variando de `-10.9°` a `+7.0°` (`8°/s`), vento variável, rajadas turbulentas e 4 petelecos:
+
+![ppo_chaotic se adaptando no Estágio 4 Dinâmico](assets/ppo_chaotic_adaptive.gif)
+
 ## Documentação do Repositório
 
 - [`AGENTS.md`](AGENTS.md) — Guia operacional para agentes de código: comandos, arquitetura, invariantes de física/PBRS e regras de teste/versionamento.

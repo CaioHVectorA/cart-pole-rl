@@ -95,6 +95,8 @@ class CartPolePhysics:
         self.dist = disturbance or DisturbanceConfig()
         self.rng = rng or np.random.default_rng()
         self.state = PhysicsState()
+        self._target_alpha: float = 0.0
+        self._target_wind_mean: float = 0.0
 
     def reset(
         self,
@@ -113,8 +115,10 @@ class CartPolePhysics:
         if pct > 0.0:
             self.cfg.cart_mass *= float(self.rng.uniform(1.0 - pct, 1.0 + pct))
             self.cfg.bob_mass *= float(self.rng.uniform(1.0 - pct, 1.0 + pct))
+            self.cfg.cart_viscous_friction *= float(self.rng.uniform(1.0 - pct, 1.0 + pct))
             self.cfg.pivot_viscous_friction *= float(self.rng.uniform(1.0 - pct, 1.0 + pct))
             self.cfg.pivot_coulomb_friction *= float(self.rng.uniform(1.0 - pct, 1.0 + pct))
+            self.cfg.motor_holding_torque *= float(self.rng.uniform(1.0 - 0.5 * pct, 1.0 + 0.5 * pct))
             self.cfg.backlash_m *= float(self.rng.uniform(0.5, 1.0 + pct))
 
         if randomize_disturbances and self.dist.tilt_range_deg != (0.0, 0.0):
@@ -127,6 +131,10 @@ class CartPolePhysics:
         else:
             wind_mean = self.dist.wind_mean_mps
 
+        alpha_rad = math.radians(tilt_deg)
+        self._target_alpha = alpha_rad
+        self._target_wind_mean = float(wind_mean)
+
         self.state = PhysicsState(
             x=float(x),
             v=float(v),
@@ -134,7 +142,7 @@ class CartPolePhysics:
             v_motor=float(v),
             theta=float(theta),
             omega=float(omega),
-            alpha=math.radians(tilt_deg),
+            alpha=alpha_rad,
             wind_mean=float(wind_mean),
             wind_gust=0.0,
             flick_torque=0.0,
@@ -317,6 +325,28 @@ class CartPolePhysics:
         dt = cfg.control_dt / substeps
 
         v_target = max(-cfg.max_velocity, min(cfg.max_velocity, float(target_velocity_mps)))
+
+        # Atualiza inclinação dinâmica e vento médio variável intra-episódio (adaptabilidade)
+        if randomize_disturbances and self.dist.tilt_change_prob_per_sec > 0.0 and self.dist.tilt_range_deg != (0.0, 0.0):
+            p_tilt = 1.0 - math.exp(-self.dist.tilt_change_prob_per_sec * cfg.control_dt)
+            if self.rng.random() < p_tilt:
+                self._target_alpha = math.radians(float(self.rng.uniform(*self.dist.tilt_range_deg)))
+        if randomize_disturbances and self.dist.tilt_slew_deg_per_s > 0.0:
+            max_step = math.radians(self.dist.tilt_slew_deg_per_s) * cfg.control_dt
+            delta_a = self._target_alpha - s.alpha
+            if abs(delta_a) <= max_step:
+                s.alpha = self._target_alpha
+            else:
+                s.alpha += math.copysign(max_step, delta_a)
+        elif randomize_disturbances and self.dist.tilt_change_prob_per_sec > 0.0:
+            s.alpha = self._target_alpha
+
+        if randomize_disturbances and self.dist.wind_change_prob_per_sec > 0.0 and self.dist.wind_mean_range_mps != (0.0, 0.0):
+            p_wind = 1.0 - math.exp(-self.dist.wind_change_prob_per_sec * cfg.control_dt)
+            if self.rng.random() < p_wind:
+                self._target_wind_mean = float(self.rng.uniform(*self.dist.wind_mean_range_mps))
+            blend = 1.0 - math.exp(-cfg.control_dt / 1.0)
+            s.wind_mean += blend * (self._target_wind_mean - s.wind_mean)
 
         # Atualiza rajada de vento (Ornstein-Uhlenbeck) e petelecos aleatórios por passo de controle
         if randomize_disturbances and self.dist.wind_gust_std_mps > 0.0:

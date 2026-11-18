@@ -7,9 +7,17 @@ __pycache__/
 dist/
 build/
 
-# Logs e checkpoints intermediários de treino (mantém apenas o modelo campeão)
+# Logs e checkpoints intermediários de treino (mantém apenas modelos campeões)
 runs/*
 !runs/ppo_cartpole/
 runs/ppo_cartpole/*
 !runs/ppo_cartpole/best_model.zip
 !runs/ppo_cartpole/run_config.json
+!runs/ppo_simple/
+runs/ppo_simple/*
+!runs/ppo_simple/best_model.zip
+!runs/ppo_simple/run_config.json
+!runs/ppo_chaotic/
+runs/ppo_chaotic/*
+!runs/ppo_chaotic/best_model.zip
+!runs/ppo_chaotic/run_config.json

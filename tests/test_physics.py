@@ -133,3 +133,30 @@ def test_drive_modes_and_backlash() -> None:
         belt.step(-belt_cfg.max_velocity, randomize_disturbances=False)
     assert abs(belt.state.x_motor - belt.state.x) <= 0.001 + 1e-6
     assert abs(wrap_angle(0.0)) == 0.0
+
+
+def test_dynamic_tilt_and_wind_adaptation() -> None:
+    """Inclinação e vento médio devem variar intra-episódio quando habilitados."""
+    dist = DisturbanceConfig(
+        tilt_range_deg=(-12.0, 12.0),
+        tilt_change_prob_per_sec=20.0,
+        tilt_slew_deg_per_s=15.0,
+        wind_mean_range_mps=(-5.0, 5.0),
+        wind_change_prob_per_sec=20.0,
+    )
+    phys = CartPolePhysics(disturbance=dist, rng=__import__("numpy").random.default_rng(7))
+    phys.reset(randomize_disturbances=True)
+    alpha0 = phys.state.alpha
+    wind0 = phys.state.wind_mean
+
+    alphas = {alpha0}
+    winds = {wind0}
+    for _ in range(50):
+        phys.step(0.0, randomize_disturbances=True)
+        alphas.add(round(phys.state.alpha, 6))
+        winds.add(round(phys.state.wind_mean, 6))
+
+    assert len(alphas) > 3
+    assert len(winds) > 3
+    assert abs(math.degrees(phys.state.alpha)) <= 12.0 + 1e-6
+

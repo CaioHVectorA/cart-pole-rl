@@ -170,6 +170,11 @@ class DisturbanceConfig:
     flick_impulse_range: tuple[float, float] = (0.04, 0.12)
     flick_duration_s: float = 0.04
 
+    # Adaptação intra-episódio (padrão 0.0 mantém comportamento estacionário)
+    tilt_change_prob_per_sec: float = 0.0
+    tilt_slew_deg_per_s: float = 0.0
+    wind_change_prob_per_sec: float = 0.0
+
     param_randomization_pct: float = 0.0
 
 

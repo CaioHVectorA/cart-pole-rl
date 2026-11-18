@@ -75,6 +75,38 @@ DEFAULT_STAGES: tuple[CurriculumStage, ...] = (
     ),
 )
 
+ADAPTIVE_CHAOS_STAGES: tuple[CurriculumStage, ...] = (
+    DEFAULT_STAGES[0],
+    DEFAULT_STAGES[1],
+    DEFAULT_STAGES[2],
+    CurriculumStage(
+        stage_id=3,
+        name="Estágio 3 - Caos completo (±12° + vento forte + rajadas + petelecos)",
+        disturbance=DEFAULT_STAGES[3].disturbance,
+        promote_mean_reward=880.0,
+        min_steps_in_stage=120_000,
+    ),
+    CurriculumStage(
+        stage_id=4,
+        name="Estágio 4 - Caos Adaptativo Dinâmico (±14° móveis + vento variável + rajadas + petelecos + rand ±15%)",
+        disturbance=DisturbanceConfig(
+            tilt_range_deg=(-14.0, 14.0),
+            wind_mean_range_mps=(-6.5, 6.5),
+            wind_gust_std_mps=2.2,
+            wind_gust_tau_s=0.6,
+            flick_prob_per_sec=0.35,
+            flick_impulse_range=(0.04, 0.14),
+            flick_duration_s=0.04,
+            tilt_change_prob_per_sec=0.15,
+            tilt_slew_deg_per_s=8.0,
+            wind_change_prob_per_sec=0.20,
+            param_randomization_pct=0.15,
+        ),
+        promote_mean_reward=float("inf"),
+        min_steps_in_stage=0,
+    ),
+)
+
 
 class CurriculumManager:
     """Controla a progressão adaptativa de estágios durante o treino."""

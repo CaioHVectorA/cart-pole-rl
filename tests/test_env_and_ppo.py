@@ -112,3 +112,30 @@ def test_ppo_smoke_train_and_reload(tmp_path: Path) -> None:
         if term or trunc:
             break
     eval_env.close()
+
+
+def test_fixed_stage_and_adaptive_chaos_stages(tmp_path: Path) -> None:
+    """fixed_stage trava no Estágio 0 e ADAPTIVE_CHAOS_STAGES contém 5 estágios."""
+    from cartpole_sim.curriculum import ADAPTIVE_CHAOS_STAGES
+
+    assert len(ADAPTIVE_CHAOS_STAGES) == 5
+    cm = CurriculumManager(stages=(ADAPTIVE_CHAOS_STAGES[0],), initial_stage=0)
+    assert cm.is_final_stage
+    assert not cm.maybe_advance(mean_eval_reward=5000.0, total_steps_delta=1_000_000)
+
+    out_dir = tmp_path / "fixed_run"
+    best = train_ppo(
+        output_dir=out_dir,
+        total_timesteps=512,
+        n_envs=1,
+        seed=7,
+        initial_stage=0,
+        fixed_stage=True,
+        eval_freq_steps=512,
+        n_eval_episodes=1,
+        verbose=0,
+    )
+    assert best.exists()
+    meta = (out_dir / "run_config.json").read_text(encoding="utf-8")
+    assert '"fixed_stage": true' in meta
+

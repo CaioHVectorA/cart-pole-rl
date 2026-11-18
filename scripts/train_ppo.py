@@ -21,8 +21,10 @@ def parse_args() -> argparse.Namespace:
         default=DriveMode.BELT_PULLEY.value,
         help="Transmissão: belt_pulley (polia GT2) ou lead_screw (barra roscada TR8x8)",
     )
-    parser.add_argument("--no-curriculum", action="store_true", help="Desativa curriculum (inicia já no Estágio 3)")
-    parser.add_argument("--initial-stage", type=int, default=0, choices=[0, 1, 2, 3])
+    parser.add_argument("--no-curriculum", action="store_true", help="Desativa curriculum (inicia já no último estágio)")
+    parser.add_argument("--initial-stage", type=int, default=0, choices=[0, 1, 2, 3, 4])
+    parser.add_argument("--fixed-stage", action="store_true", help="Mantém o treino fixo no --initial-stage sem avançar")
+    parser.add_argument("--adaptive-chaos", action="store_true", help="Habilita estágio 4 de caos extremo + adaptabilidade dinâmica")
     parser.add_argument("--no-pbrs", action="store_true", help="Desativa shaping PBRS (para ablação)")
     parser.add_argument("--lr", type=float, default=2.5e-4)
     parser.add_argument("--ent-coef", type=float, default=0.001)
@@ -43,6 +45,8 @@ def main() -> None:
         drive_mode=DriveMode(args.drive),
         use_curriculum=not args.no_curriculum,
         initial_stage=args.initial_stage,
+        fixed_stage=args.fixed_stage,
+        adaptive_chaos=args.adaptive_chaos,
         use_pbrs=not args.no_pbrs,
         learning_rate=args.lr,
         ent_coef=args.ent_coef,

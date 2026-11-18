@@ -1,0 +1,14 @@
+{
+  "drive_mode": "belt_pulley",
+  "use_pbrs": true,
+  "gamma": 0.99,
+  "frame_stack": 12,
+  "control_dt": 0.02,
+  "rail_half_length": 0.35,
+  "rod_length": 0.32,
+  "bob_distance": 0.22,
+  "use_curriculum": true,
+  "fixed_stage": false,
+  "adaptive_chaos": true,
+  "initial_stage": 0
+}

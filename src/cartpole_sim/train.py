@@ -16,7 +16,7 @@ from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecEnv, VecNormalize
 
 from cartpole_sim.config import DriveMode, SimConfig
-from cartpole_sim.curriculum import CurriculumManager, DEFAULT_STAGES
+from cartpole_sim.curriculum import ADAPTIVE_CHAOS_STAGES, DEFAULT_STAGES, CurriculumManager
 from cartpole_sim.env import CartPoleStepperEnv
 
 
@@ -94,6 +94,23 @@ class CurriculumEvalCallback(EvalCallback):
         self.output_dir = output_dir
         self._last_check_timesteps = 0
 
+    def _save_checkpoint_state(self) -> None:
+        state = {
+            "current_idx": int(self.curriculum.current_idx),
+            "steps_in_stage": int(self.curriculum.steps_in_stage),
+            "best_mean_reward": (
+                None if np.isneginf(self.best_mean_reward) else float(self.best_mean_reward)
+            ),
+            "num_timesteps": int(self.num_timesteps),
+        }
+        (self.output_dir / "curriculum_state.json").write_text(
+            json.dumps(state, indent=2), encoding="utf-8"
+        )
+        if self.model is not None:
+            self.model.save(self.output_dir / "last_model.zip")
+        if isinstance(self.training_env, VecNormalize):
+            self.training_env.save(str(self.output_dir / "vec_normalize.pkl"))
+
     def _apply_stage_to_envs(self) -> None:
         dist = self.curriculum.current_stage.disturbance
         self.training_env.env_method("set_disturbance_config", dist)
@@ -133,6 +150,7 @@ class CurriculumEvalCallback(EvalCallback):
                         f"(reward={mean_rew:.1f} >= {old_stage.promote_mean_reward:.1f}) -> "
                         f"{self.curriculum.current_stage.name}\n"
                     )
+            self._save_checkpoint_state()
         return continue_training
 
 
@@ -193,6 +211,8 @@ def train_ppo(
     drive_mode: DriveMode = DriveMode.BELT_PULLEY,
     use_curriculum: bool = True,
     initial_stage: int = 0,
+    fixed_stage: bool = False,
+    adaptive_chaos: bool = False,
     use_pbrs: bool = True,
     learning_rate: float = 2.5e-4,
     ent_coef: float = 0.001,
@@ -213,10 +233,15 @@ def train_ppo(
     train_cfg.eval_mode = False
     train_cfg.randomize_disturbances = True
 
-    curriculum = CurriculumManager(
-        stages=DEFAULT_STAGES,
-        initial_stage=initial_stage if use_curriculum else len(DEFAULT_STAGES) - 1,
-    )
+    stages = ADAPTIVE_CHAOS_STAGES if adaptive_chaos else DEFAULT_STAGES
+    clamped_stage = max(0, min(initial_stage, len(stages) - 1))
+    if fixed_stage:
+        curriculum = CurriculumManager(stages=(stages[clamped_stage],), initial_stage=0)
+    else:
+        curriculum = CurriculumManager(
+            stages=stages,
+            initial_stage=clamped_stage if use_curriculum else len(stages) - 1,
+        )
     train_cfg.disturbance = dataclasses.replace(curriculum.current_stage.disturbance)
 
     eval_cfg = SimConfig(
@@ -239,11 +264,30 @@ def train_ppo(
         "rail_half_length": train_cfg.physics.rail_half_length,
         "rod_length": train_cfg.physics.rod_length,
         "bob_distance": train_cfg.physics.bob_distance,
-        "use_curriculum": use_curriculum,
+        "use_curriculum": use_curriculum and not fixed_stage,
+        "fixed_stage": fixed_stage,
+        "adaptive_chaos": adaptive_chaos,
+        "initial_stage": curriculum.current_stage.stage_id,
     }
     (out_path / "run_config.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
     resume_path = Path(resume_from) if resume_from is not None else None
+    restored_best_reward: float | None = None
+    if resume_path is not None:
+        cstate_candidate = resume_path.parent / "curriculum_state.json"
+        if cstate_candidate.exists():
+            cstate = json.loads(cstate_candidate.read_text(encoding="utf-8"))
+            if not fixed_stage:
+                restored_idx = max(0, min(int(cstate.get("current_idx", 0)), len(stages) - 1))
+                if restored_idx > curriculum.current_idx:
+                    curriculum.current_idx = restored_idx
+                    curriculum.steps_in_stage = int(cstate.get("steps_in_stage", 0))
+                elif restored_idx == curriculum.current_idx:
+                    curriculum.steps_in_stage = int(cstate.get("steps_in_stage", 0))
+                train_cfg.disturbance = dataclasses.replace(curriculum.current_stage.disturbance)
+                eval_cfg.disturbance = dataclasses.replace(curriculum.current_stage.disturbance)
+            restored_best_reward = cstate.get("best_mean_reward")
+
     raw_train_fns = [_make_single_env(train_cfg, seed=seed, rank=i) for i in range(n_envs)]
     raw_train_vec: VecEnv = SubprocVecEnv(raw_train_fns) if n_envs > 1 else DummyVecEnv(raw_train_fns)
 
@@ -316,6 +360,9 @@ def train_ppo(
         n_eval_episodes=n_eval_episodes,
         verbose=verbose,
     )
+    if restored_best_reward is not None:
+        eval_cb.best_mean_reward = float(restored_best_reward)
+
     telem_cb = TelemetryCallback(log_freq=max(512, n_steps_per_env))
     callbacks: list[BaseCallback] = [eval_cb, telem_cb]
     if max_minutes is not None and max_minutes > 0.0:
@@ -331,6 +378,17 @@ def train_ppo(
         model.save(out_path / "last_model.zip")
         if isinstance(train_env, VecNormalize):
             train_env.save(str(out_path / "vec_normalize.pkl"))
+        state = {
+            "current_idx": int(curriculum.current_idx),
+            "steps_in_stage": int(curriculum.steps_in_stage),
+            "best_mean_reward": (
+                None if np.isneginf(eval_cb.best_mean_reward) else float(eval_cb.best_mean_reward)
+            ),
+            "num_timesteps": int(model.num_timesteps),
+        }
+        (out_path / "curriculum_state.json").write_text(
+            json.dumps(state, indent=2), encoding="utf-8"
+        )
         train_env.close()
         eval_env.close()
 
